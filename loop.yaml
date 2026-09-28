@@ -1,0 +1,92 @@
+---
+# Nested-loop examples for an Ansible playbook
+# Run:  ansible-playbook loop.yaml -v
+# Note: "all" hosts is a placeholder; point it at your inventory.
+
+- name: Nested loops examples
+  hosts: all
+  vars:
+    # Simple flat lists used for the keyword-based nested loops
+    services:
+      - nginx
+      - sshd
+      - apache
+    ports:
+      - 22
+      - 80
+      - 443
+    interfaces:
+      - eth0
+      - eth1
+    # Nested structure used for the block-based nested loop
+    services_detail:
+      - { name: nginx, ports: [80, 443] }
+      - { name: sshd,  ports: [22] }
+
+  tasks:
+    # ---------------------------------------------------------------------
+    # Example 1: two-level nested loop with `with2keys`
+    #   `item` becomes [outer_item, inner_item]
+    # ---------------------------------------------------------------------
+    - name: Print every (service, port) combination
+      ansible.builtin.debug:
+        msg: "service={{ service }} port={{ port }}"
+      vars:
+        service: "{{ item.0 }}"
+        port: "{{ item.1 }}"
+      with2keys:
+        - services
+        - ports
+
+    # ---------------------------------------------------------------------
+    # Example 2: three-level nested loop with `with3keys`
+    #   `item` becomes [list1, list2, list3]
+    # ---------------------------------------------------------------------
+    - name: Print every (service, port, interface) combination
+      ansible.builtin.debug:
+        msg: "service={{ service }} port={{ port }} iface={{ iface }}"
+      vars:
+        service: "{{ item.0 }}"
+        port: "{{ item.1 }}"
+        iface: "{{ item.2 }}"
+      with3keys:
+        - services
+        - ports
+        - interfaces
+
+    # ---------------------------------------------------------------------
+    # Example 3: explicit nested loop = outer `loop:` + `block:` + inner `loop:`
+    #   Outer `loop_var` (service) is visible to the inner task in the block.
+    # ---------------------------------------------------------------------
+    - name: Outer loop over services
+      ansible.builtin.debug:
+        msg: "Configuring service {{ service.name }}"
+      vars:
+        service: "{{ item.0 }}"
+      loop: "{{ services_detail }}"
+      loop_control:
+        loop_var: service
+      block:
+        - name: Inner loop over that service's ports
+          ansible.builtin.debug:
+            msg: "  Opening port {{ port.0 }}"
+          vars:
+            port: "{{ item.0 }}"
+          loop: "{{ service.ports }}"
+          loop_control:
+            loop_var: port
+
+    # ---------------------------------------------------------------------
+    # Example 4: two-level nested loop over a nested structure (no block)
+    #   Unroll the nested `ports` with `with2keys` against the service list.
+    # ---------------------------------------------------------------------
+    - name: Flat product of services x their ports (via with2keys)
+      ansible.builtin.debug:
+        msg: "bind {{ outer.name }} port {{ inner.0 }} to all {{ inner.1 }}"
+      vars:
+        outer: "{{ item.0 }}"
+        inner: "{{ item.1 }}"
+      with2keys:
+        - services_detail
+        - ports
+        - interfaces
